@@ -1,0 +1,45 @@
+#!/bin/bash
+
+#TESTED: 06/07/2026
+
+echo update the sources list...
+sudo apt update -y
+echo Done!
+
+echo upgrade the packages...
+sudo apt upgrade -y
+echo Done!
+
+
+echo install MongoDB...
+curl -fsSL https://pgp.mongodb.com/server-8.0.asc | \
+   sudo gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg \
+   --dearmor
+echo Done!
+
+echo create list file
+echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+echo Done!
+
+echo update package list
+sudo apt-get update
+echo Done!
+
+echo install the MongoDB packages
+sudo apt-get install -y \
+   mongodb-org=8.2.5 \
+   mongodb-org-database=8.2.5 \
+   mongodb-org-server=8.2.5 \
+   mongodb-mongosh \
+   mongodb-org-shell=8.2.5 \
+   mongodb-org-mongos=8.2.5 \
+   mongodb-org-tools=8.2.5 \
+   mongodb-org-database-tools-extra=8.2.5
+echo Done!
+
+
+sudo systemctl start mongod
+sudo systemctl enable mongod
+sudo systemctl status mongod
+
+mongo --version
