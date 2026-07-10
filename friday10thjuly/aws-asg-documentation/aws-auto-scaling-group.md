@@ -2,37 +2,57 @@
 
 ## Overview
 
-I recreated an AWS Auto Scaling Group for my application.
+I recreated an AWS Auto Scaling Group for the tic tac toe application successfully.
 
 The setup included:
 
-- a launch template;
-- multiple Availability Zones;
-- an Application Load Balancer;
-- a target group;
-- Elastic Load Balancing health checks;
-- a target tracking scaling policy;
-- two application instances by default;
-- a maximum of three application instances;
-- one separate MongoDB EC2 instance.
+- a launch template
+- multiple Availability Zones
+- an Application Load Balancer
+- a target group
+- Elastic Load Balancing health checks
+- a target tracking scaling policy
+- two application instances by default
+- a maximum of three application instances
+- one separate MongoDB EC2 instance
 
-The Auto Scaling Group scales only the application tier. The MongoDB database remains as one separate EC2 instance.
+The Auto Scaling Group scales only the application not the database instance, that will not be scaled.
 
 ---
-
 ## Architecture
 
 ```mermaid
-flowchart TD
+flowchart LR
+
     U[User] --> LB[Application Load Balancer]
-    LB --> A1[App Instance 1]
-    LB --> A2[App Instance 2]
 
-    ASG[Auto Scaling Group] --> A1
-    ASG --> A2
+    LT[Launch Template] --> ASG
 
-    A1 --> DB[(MongoDB Instance)]
-    A2 --> DB
+    subgraph ASG[Auto Scaling Group]
+        direction TB
+
+        C[Desired capacity: 2<br/>Maximum capacity: 3]
+
+        subgraph AZ1[Availability Zone 1]
+            APP1[App VM 1]
+        end
+
+        subgraph AZ2[Availability Zone 2]
+            APP2[App VM 2]
+        end
+
+        subgraph AZ3[Availability Zone 3]
+            APP3[App VM 3<br/>Created when scaling out]
+        end
+    end
+
+    LB --> APP1
+    LB --> APP2
+    LB -.-> APP3
+
+    APP1 --> DB[(Single MongoDB VM)]
+    APP2 --> DB
+    APP3 -.-> DB
 ```
 
 The user accesses the application through the load balancer DNS name.
@@ -88,7 +108,7 @@ export MONGODB_URI="mongodb://<DB-PRIVATE-IP>:27017/tictactoe"
 
 This ensures that every app instance launched by the Auto Scaling Group connects to the same MongoDB VM.
 
-![Choosing the launch template](./images/01-launch-template.png)
+
 
 ---
 
@@ -156,7 +176,6 @@ The load balancer configuration was:
 
 The load balancer was created in the same VPC and used public subnets across the selected Availability Zones.
 
-![Creating the Application Load Balancer](./images/03-load-balancer.png)
 
 ---
 
@@ -219,7 +238,7 @@ The grace period gives a newly launched instance time to boot, run its user data
 
 If an instance repeatedly fails its health checks after the grace period, the Auto Scaling Group can mark it as unhealthy and replace it.
 
-![Target group and health-check configuration](./images/04-target-group-health-checks.png)
+
 
 ---
 
@@ -347,53 +366,6 @@ For this temporary training deployment, MongoDB port `27017` was opened for test
 
 ---
 
-# Testing the deployment
-
-## Test the load balancer
-
-I copied the Application Load Balancer DNS name and opened it in a browser.
-
-The application loaded successfully through the DNS name.
-
-This confirmed that the listener, target group and healthy app instances were working.
-
-## Test database persistence
-
-To prove that all app instances used the same MongoDB VM:
-
-1. I opened the application through the load balancer DNS name.
-2. I created data through the application.
-3. I refreshed the page and confirmed that the data remained.
-4. I terminated one app instance.
-5. The Auto Scaling Group launched a replacement.
-6. I waited for the replacement to become healthy.
-7. I reopened the application through the DNS name.
-8. The original data was still available.
-
-This showed that the data was stored in MongoDB rather than on a disposable app instance.
-
-## Test an unhealthy instance
-
-To make an app instance unhealthy, I could SSH into it and stop Nginx:
-
-```bash
-sudo systemctl stop nginx
-```
-
-The load balancer health check would fail because the instance would no longer respond successfully on port `80`.
-
-After enough failed health checks, the target would be marked unhealthy.
-
-Because Elastic Load Balancing health checks were enabled for the Auto Scaling Group, AWS could terminate the unhealthy instance and launch a replacement.
-
-To restore the instance before replacement:
-
-```bash
-sudo systemctl restart nginx
-```
-
----
-
 # Blocker encountered
 
 ## Inconsistent MongoDB connection through the load balancer
@@ -428,29 +400,6 @@ Possible causes include:
 Due to time constraints, I recorded this as an unresolved blocker and did not complete further troubleshooting.
 
 The Auto Scaling Group, load balancer and application remained operational, but the database connection was not consistent across every request.
-
-### Current status
-
-```text
-Auto Scaling Group: Working
-Load balancer DNS: Working
-Application instances: Running
-MongoDB instance: Running
-Database connection across all app instances: Inconsistent / unresolved
-```
-
-### Suggested future investigation
-
-The next troubleshooting step would be to SSH into each app instance separately and compare:
-
-```bash
-pm2 env 0 | grep MONGODB_URI
-pm2 logs --lines 50
-nc -zv <DB-PRIVATE-IP> 27017
-sudo tail -n 100 /var/log/cloud-init-output.log
-```
-
-This would help identify which app instance was failing to connect and whether the issue came from user data, PM2 or network connectivity.
 
 ---
 
