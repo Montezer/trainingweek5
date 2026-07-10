@@ -18,8 +18,11 @@ npm install
 
 npm install pm2 -g
 
+export MONGODB_URI=mongodb://172.31.48.134:27017/tictactoe
+
 pm2 kill
 pm2 start index.js
+MONGODB_URI=mongodb://172.31.48.134:27017/tictactoe pm2 start index.js --update-env
 pm2 startup systemd -u root --hp /root
 pm2 save
 
